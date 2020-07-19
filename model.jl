@@ -22,19 +22,19 @@ function likelihood(trial::Trial, drift, threshold)
 end
 
 "p(drift)"
-function prior(drift)
-    pdf(Normal(0, √2), drift)  # N(0, 1) - N(0, 1)
+function prior(drift, σ)
+    pdf(Normal(0, σ * √2), drift)  # N(0, σ) - N(0, σ)
 end
 
 "unnormalized p(drift, threshold | rt, choice)"
-function posterior(trial::Trial, drift, threshold)
-    likelihood(trial, drift, threshold) * prior(drift)
+function posterior(trial::Trial, drift, threshold, σ)
+    likelihood(trial, drift, threshold) * prior(drift, σ)
 end
 
 "argmax p(drift | rt, choice, threshold)"
-function MAP_drift(trial::Trial, threshold)
-    res = optimize(-10, 10) do drift
-        -log(posterior(trial, drift, threshold))
+function MAP_drift(trial::Trial, threshold, σ)
+    res = optimize(-100, 100) do drift
+        -log(posterior(trial, drift, threshold, σ))
         # -(log(prior(drift)) + log(likelihood(trial, drift, threshold)))
     end
     res.minimizer
@@ -51,8 +51,8 @@ function MAP_drift_threshold(trial::Trial; max_threshold=10., max_drift=10.)
 end
 
 # for convenience, assume choice is 1 when you give only an RT
-MAP_drift(rt::Float64, threshold) = MAP_drift((rt, 1), threshold)
-MAP_drift_threshold(rt::Float64) = MAP_drift_threshold((rt, 1))
+MAP_drift(rt::Float64, θ, σ) = MAP_drift((rt, 1), θ, σ)
+MAP_drift_threshold(rt::Float64, σ) = MAP_drift_threshold((rt, 1), σ)
 
 
 
