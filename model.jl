@@ -10,7 +10,7 @@ Base.reduce(f::Function) = x -> reduce(f, x)
 Base.map(f::Function) = x -> map(f, x)
 
 const dt = 1e-3  # temporal granularity of DDM
-Trial = Tuple{Float64, Int}  # RT, choice (0/1)
+Trial = Tuple{Real, Int}  # RT, choice (0/1)
 
 "p(rt, choice | drift, threshold)"
 function likelihood(trial::Trial, drift, threshold)
@@ -40,6 +40,15 @@ function MAP_drift(trial::Trial, threshold, σ)
     res.minimizer
 end
 
+function posterior_mean_drift(trial::Trial, threshold, σ)
+    normalizing_constant = quadgk(-10σ, 10σ) do drift
+        posterior(trial, drift, threshold, σ)
+    end |> first
+    quadgk(-10σ, 10σ) do drift
+        posterior(trial, drift, threshold, σ) / normalizing_constant * drift
+    end |> first
+end
+
 "argmax p(drift, threshold | rt, choice)"
 function MAP_drift_threshold(trial::Trial; max_threshold=10., max_drift=10.)
     lower = [-max_drift, 1e-3]; upper = [max_drift, max_threshold]
@@ -51,8 +60,9 @@ function MAP_drift_threshold(trial::Trial; max_threshold=10., max_drift=10.)
 end
 
 # for convenience, assume choice is 1 when you give only an RT
-MAP_drift(rt::Float64, θ, σ) = MAP_drift((rt, 1), θ, σ)
-MAP_drift_threshold(rt::Float64, σ) = MAP_drift_threshold((rt, 1), σ)
+MAP_drift(rt::Real, θ, σ) = MAP_drift((rt, 1), θ, σ)
+MAP_drift_threshold(rt::Real, σ) = MAP_drift_threshold((rt, 1), σ)
+posterior_mean_drift(rt::Real, θ, σ) = posterior_mean_drift((rt, 1), θ, σ)
 
 
 

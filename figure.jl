@@ -1,7 +1,7 @@
 using Plots
 using Dates
 mkpath("fighist")
-plot(label="")
+gr(label="", dpi=200, size=(400,300))
 
 function figure(f, name="tmp"; kws...)
     plot(;kws...)

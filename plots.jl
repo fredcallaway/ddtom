@@ -1,17 +1,49 @@
-using StatsPlots
+using Plots
 gr(label="", dpi=300)
 plot([1,2])
 
 include("model.jl")
+include("figure.jl")
+
+
+# %% ==================== Experiment 1 ====================
+
+
+figure("exp1") do 
+    rts = (3:.1:9)
+    β, θ, σ = 20, 12, .4
+    plot(rts, β.*MAP_drift.(rts, θ, σ),
+        size=(400,300),
+        xaxis="Decision Time", 
+        yaxis="Model Inferred Preference", 
+        ylim=(0,50),
+    )
+    plot!(rts, β.*posterior_mean_drift.(rts, θ, σ),
+        color=:red,
+        size=(400,300),
+        xaxis="Decision Time", 
+        yaxis="Model Inferred Preference", 
+        ylim=(0,50),
+    )
+end
+
+
 
 # %% ==================== DDM likelihood ====================
-dd = ConstDrift(0.2, dt)
-bb = ConstSymBounds(1, dt)
-pl, pu = pdf(dd, bb, 4)
-plot(pu)
-plot!(-pl)
-hline!([0], color=:black)
 
+function plot_choice_rt(drift, threshold; max_rt=10)
+    dd = ConstDrift(drift, dt)
+    bb = ConstSymBounds(threshold, dt)
+    pu, pl = pdf(dd, bb, max_rt)
+    plot(pu)
+    plot!(-pl)
+    hline!([0], color=:black)
+end
+
+figure() do
+    σ = .5; θ = 1.8
+    plot_choice_rt(randn() * σ * √2, θ)
+end
 # %% ==================== Drift rate posterior ====================
 trial = (2., 0)
 drifts = -4:0.01:4
@@ -64,6 +96,7 @@ plot(figs..., size=(900,600))
 savefig("figs/heatmaps")
 
 # %% ==================== Posterior over drift, integrating out threshold ====================
+
 figs = map(rts) do rt
     trial = (rt, 1)
     pdrift = map(vs) do drift

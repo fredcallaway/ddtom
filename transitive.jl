@@ -66,7 +66,7 @@ function define_trials(fast=3., slow=9.)
     )
 end
 
-function get_predictions(σ, θ)
+function exp2_predictions(σ, θ)
     map(collect(define_trials())) do (k, trials)
         k => predict_bc_choice(trials...; σ=σ, θ=θ)
     end |> Dict
