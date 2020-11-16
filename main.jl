@@ -3,6 +3,7 @@ using Serialization
 using JSON
 using Dates
 using Glob
+using ProgressMeter
 
 @everywhere include("model.jl")
 include("figure.jl")
@@ -47,7 +48,7 @@ function precompute_exp2_preds()
     mkpath(name)
     out = "$name/$stamp.jls"
 
-    @time results = pmap(grid) do (σ, θ)
+    results = @showprogress pmap(grid) do (σ, θ)
         exp2_predictions(σ, θ)
     end
 
@@ -55,10 +56,14 @@ function precompute_exp2_preds()
     println("Wrote ", out)
 end
 
-# precompute_exp2_preds()
 
 # load the most recent (this year!) precomputed grid
-grid2, results = deserialize(sort!(glob("tmp/exp2-grid/*"))[end])
+grid_files = sort!(glob("tmp/exp2-grid/*")
+if isempty(grid_files)
+    println("Warning: precomputing experiment 2 predictions. Hopefully you have multiple cpus.")
+    precompute_exp2_preds()
+end
+grid2, results = deserialize(grid_files)[end])
 @assert collect(grid2) == grid
 
 
