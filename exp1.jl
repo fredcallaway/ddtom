@@ -1,6 +1,5 @@
 include("model.jl")
 include("figure.jl")
-gr(label="", dpi=200)
 
 # %% --------
 figure("exp1") do 

@@ -3,6 +3,7 @@ using Serialization
 using JSON
 
 @everywhere include("model.jl")
+include("figure.jl")
 data = JSON.parsefile("trends_to_fit.json")
 
 σs = 0.1:0.1:1
@@ -22,10 +23,6 @@ figure() do
         plot!(rts, foo(v, θ); label="$v")
     end
 end
-
-quadgk(0, 50) do rt
-    likelihood((rt, 1), 2.5, θ)
-end |> first
 
 # %% --------
 
