@@ -2,7 +2,7 @@
 using DiffModels
 using Statistics
 using Optim
-using QuadGK
+using Cubature
 using Distributions
 
 # Allow currying for functional fun
@@ -41,10 +41,10 @@ function MAP_drift(trial::Trial, threshold, σ)
 end
 
 function posterior_mean_drift(trial::Trial, threshold, σ)
-    normalizing_constant = quadgk(-10σ, 10σ) do drift
+    normalizing_constant = hquadrature(-10σ, 10σ) do drift
         posterior(trial, drift, threshold, σ)
     end |> first
-    quadgk(-10σ, 10σ) do drift
+    hquadrature(-10σ, 10σ) do drift
         posterior(trial, drift, threshold, σ) / normalizing_constant * drift
     end |> first
 end

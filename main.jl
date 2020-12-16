@@ -58,12 +58,12 @@ end
 
 
 # load the most recent (this year!) precomputed grid
-grid_files = sort!(glob("tmp/exp2-grid/*")
+grid_files = sort!(glob("tmp/exp2-grid/*"))
 if isempty(grid_files)
     println("Warning: precomputing experiment 2 predictions. Hopefully you have multiple cpus.")
     precompute_exp2_preds()
 end
-grid2, results = deserialize(grid_files)[end])
+grid2, results = deserialize(grid_files[end])
 @assert collect(grid2) == grid
 
 
