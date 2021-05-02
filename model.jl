@@ -21,6 +21,12 @@ function likelihood(trial::Trial, drift, threshold)
     rt_pdf(dd, bb, rt)
 end
 
+function sample_choice_rt(drift, threshold)
+    dd = ConstDrift(drift, dt)
+    bb = ConstSymBounds(threshold, dt)
+    rand(sampler(dd, bb))
+end
+
 "p(drift)"
 function prior(drift, σ)
     pdf(Normal(0, σ * √2), drift)  # N(0, σ) - N(0, σ)

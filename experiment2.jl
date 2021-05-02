@@ -11,9 +11,18 @@ Notation:
 
 include("model.jl")
 using Cubature
-const BOUNDS = ([-3., -3, -3], [3., 3, 3])  # a, b, c
-const MAX_RT = 20.
+const MAX_SD = 10
+const MAX_RT = 240.
 using DataStructures: OrderedDict
+
+function make_bounds(σ; rt=false)
+    lo = -10σ .* ones(3)
+    hi = 10σ .* ones(3)
+    if rt
+        push!(lo, 0.); push!(hi, MAX_RT)
+    end
+    lo, hi
+end
 
 "Likelihood of observed choice and RT for choices between (a and b) and (a and c)"
 function abc_likelihood(ab_trial::Trial, bc_trial::Trial, a, b, c, θ)
@@ -34,7 +43,7 @@ function make_abc_posterior(ab_trial, bc_trial; σ, θ)
     end
     
     # estimate the normalizing constant
-    Z, ε = hcubature(score, BOUNDS...)
+    Z, ε = hcubature(score, make_bounds(σ)...)
     
     function posterior(a, b, c)
         score((a, b, c)) / Z
@@ -42,12 +51,11 @@ function make_abc_posterior(ab_trial, bc_trial; σ, θ)
 end
 
 "Probability of choosing b over c given observed choices and rts for (a vs. b) and (a vs. c) "
-function predict_bc_choice(ab_trial, bc_trial; σ, θ)
+function predict_bc_choice(ab_trial, bc_trial; σ, θ, choice=1)
     post = make_abc_posterior(ab_trial, bc_trial; σ=σ, θ=θ)
-    bounds = deepcopy(BOUNDS); push!(bounds[1], 0); push!(bounds[2], MAX_RT)
 
-    Z, ε = hcubature(bounds..., abstol=1e-5, maxevals=10^6) do (a,b,c,rt)
-        post(a,b,c) * likelihood((rt, 1), b - c, θ)
+    Z, ε = hcubature(make_bounds(σ; rt=true)..., abstol=1e-5, maxevals=10^7) do (a,b,c,rt)
+        post(a,b,c) * likelihood((rt, choice), b - c, θ)
     end
     if ε > 1e-3
         @error "Integral did not converge" ε σ θ
@@ -59,10 +67,10 @@ end
 function define_trials(fast=3., slow=9.)
     # first choice between A and B, second between A and C
     OrderedDict(
-        :AA => [(fast, 1), (slow, 1)],  # < 0.5 because b is more below a than c
-        :BC => [(fast, 2), (slow, 2)],  #  > 0.5 because b is more above a than c
-        :BA => [(fast, 2), (slow, 1)],  # a > b and a << c
-        :AC => [(fast, 1), (slow, 2)],  # a >> b and a < c
+        :AA => [(fast, 1), (slow, 1)],  # a >> b  &  a > c  =>  c > b
+        :BC => [(fast, 2), (slow, 2)],  # b >> a  &  c > a  =>  b > c
+        :BA => [(fast, 2), (slow, 1)],  # b >> a  &  a > c  =>  b >> c
+        :AC => [(fast, 1), (slow, 2)],  # a >> b  &  c > a  =>  c >> b
     )
 end
 
