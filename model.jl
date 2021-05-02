@@ -1,4 +1,11 @@
-# include("model.jl")
+"
+Basic model for inferring preferences from reaction times by inverting a DDM
+
+Note: σ is called β in the paper. Here we interpret it as a prior over values
+rather than a multiplier on the drift rate. These are mathematically equivalent
+because x ~ Normal(0, σ) is equivalent to x ~ σ * Normal(0, 1).
+"
+
 using DiffModels
 using Statistics
 using Optim

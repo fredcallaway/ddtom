@@ -4,9 +4,10 @@ involving three items and make a prediction about a choice between the two
 items that have not yet been chosen between.
 
 Notation:
-    - a, b, and c are the values of three distinct items
+    - a, b, and c are the values of three distinct items (after scaling by β)
     - θ is the DDM threshold (higher is more cautious)
-    - σ is the standard deviation of the prior on value
+    - σ is the drift rate multiplier (higher is stronger evidence)
+      (it can also be interpreted as the standard deviation of the prior on value)
 "
 
 include("model.jl")
