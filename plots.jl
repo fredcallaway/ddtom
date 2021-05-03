@@ -8,8 +8,8 @@ include("figure.jl")
 
 # %% ==================== Model illustration ====================
 
-threshold = 1.
-drift = 1.
+threshold = 2.2
+drift = 0.1
 
 function simulate(drift, threshold; dt=dt, maxt=100)
     x = [0.]
@@ -23,25 +23,28 @@ function simulate(drift, threshold; dt=dt, maxt=100)
     end
     x
 end
-Random.seed!(5)
-f = plot(grid=false, yticks=false, xticks=false, framestyle=:none, ylim=(-threshold-.01, threshold+.01))
-# vline!([0], color=:black)
-# hline!([-threshold, threshold], color=:black)
+figure() do
+    Random.seed!(5)
+    f = plot(grid=false, yticks=false, xticks=false, framestyle=:none, ylim=(-threshold-.01, threshold+.01))
+    # vline!([0], color=:black)
+    # hline!([-threshold, threshold], color=:black)
 
-prms = [
-    (2, "#FF6167"),
-    (0.5, "#4A74FE"),
-]
-for (drift, color) in prms
-    for i in 1:3
-        plot!(simulate(drift, threshold; dt=.001); color=color, alpha=0.4)
+    prms = [
+        (2, "#FF6167"),
+        (0.5, "#4A74FE"),
+    ]
+    for (drift, color) in prms
+        for i in 1:3
+            plot!(simulate(drift, threshold; dt=.001); color=color, alpha=0.4)
+        end
     end
+    plot!([0, 0], [-threshold, threshold], color=:black, lw=2)
+    plot!([0, 1400], [threshold, threshold], color=:black, lw=2)
+    plot!([0, 1400], [-threshold, -threshold], color=:black, lw=2)
 end
-plot!([0, 0], [-threshold, threshold], color=:black, lw=2)
-plot!([0, 1400], [threshold, threshold], color=:black, lw=2)
-plot!([0, 1400], [-threshold, -threshold], color=:black, lw=2)
-f
-savefig("figs/ddm.pdf")
+
+
+# savefig("figs/ddm.pdf")
 # dd = ConstDrift(drift, dt)
 # bb = ConstSymBounds(threshold, dt)
 # rand(sampler(dd, bb))
