@@ -10,15 +10,14 @@ Notation:
       (it can also be interpreted as the standard deviation of the prior on value)
 "
 
-include("model.jl")
 using Cubature
 const MAX_SD = 10
 const MAX_RT = 240.
 using DataStructures: OrderedDict
 
-function make_bounds(σ; rt=false)
-    lo = -10σ .* ones(3)
-    hi = 10σ .* ones(3)
+function make_bounds(;rt=false)
+    lo = -10 .* ones(3)
+    hi = 10 .* ones(3)
     if rt
         push!(lo, 0.); push!(hi, MAX_RT)
     end
@@ -26,25 +25,25 @@ function make_bounds(σ; rt=false)
 end
 
 "Likelihood of observed choice and RT for choices between (a and b) and (a and c)"
-function abc_likelihood(ab_trial::Trial, bc_trial::Trial, a, b, c, θ)
-    likelihood(ab_trial, a - b, θ) * likelihood(bc_trial, a - c, θ)
+function abc_likelihood(model::Model, ab_trial::Observation, bc_trial::Observation, a, b, c)
+    likelihood(model, ab_trial, a - b) * likelihood(model, bc_trial, a - c)
 end
 
 "Prior probability of values a, b, c"
-function abc_prior(a, b, c; σ)
-    d = Normal(0, σ)
+function abc_prior(a, b, c)
+    d = Normal(0, 1)
     pdf(d, a) * pdf(d, b) * pdf(d, c)
 end
 
 "Computes the posterior distribution for abc_likelihood"
-function make_abc_posterior(ab_trial, bc_trial; σ, θ)
+function make_abc_posterior(model, ab_trial, bc_trial)
     # unnormalized posterior
     function score((a, b, c))
-        abc_prior(a, b, c; σ=σ) * abc_likelihood(ab_trial, bc_trial, a, b, c, θ)
+        abc_prior(a, b, c) * abc_likelihood(model, ab_trial, bc_trial, a, b, c)
     end
     
     # estimate the normalizing constant
-    Z, ε = hcubature(score, make_bounds(σ)...)
+    Z, ε = hcubature(score, make_bounds()...)
     
     function posterior(a, b, c)
         score((a, b, c)) / Z
@@ -52,14 +51,14 @@ function make_abc_posterior(ab_trial, bc_trial; σ, θ)
 end
 
 "Probability of choosing b over c given observed choices and rts for (a vs. b) and (a vs. c) "
-function predict_bc_choice(ab_trial, bc_trial; σ, θ, choice=1)
-    post = make_abc_posterior(ab_trial, bc_trial; σ=σ, θ=θ)
+function predict_bc_choice(model, ab_trial, bc_trial; choice=true)
+    post = make_abc_posterior(model, ab_trial, bc_trial)
 
-    Z, ε = hcubature(make_bounds(σ; rt=true)..., abstol=1e-5, maxevals=10^7) do (a,b,c,rt)
-        post(a,b,c) * likelihood((rt, choice), b - c, θ)
+    Z, ε = hcubature(make_bounds(rt=true)..., abstol=1e-5, maxevals=10^7) do (a,b,c,rt)
+        post(a,b,c) * likelihood(model, Observation(choice, rt), b - c)
     end
     if ε > 1e-3
-        @error "Integral did not converge" ε σ θ
+        @error "Integral did not converge" model ab_trial bc_trial
         return NaN
     end
     return Z
@@ -68,15 +67,15 @@ end
 function define_trials(fast=3., slow=9.)
     # first choice between A and B, second between A and C
     OrderedDict(
-        :AA => [(fast, 1), (slow, 1)],  # a >> b  &  a > c  =>  c > b
-        :BC => [(fast, 2), (slow, 2)],  # b >> a  &  c > a  =>  b > c
-        :BA => [(fast, 2), (slow, 1)],  # b >> a  &  a > c  =>  b >> c
-        :AC => [(fast, 1), (slow, 2)],  # a >> b  &  c > a  =>  c >> b
+        :AA => [Observation(true, fast), Observation(true, slow)],  # a >> b  &  a > c  =>  c > b
+        :BC => [Observation(false, fast), Observation(false, slow)],  # b >> a  &  c > a  =>  b > c
+        :BA => [Observation(false, fast), Observation(true, slow)],  # b >> a  &  a > c  =>  b >> c
+        :AC => [Observation(true, fast), Observation(false, slow)],  # a >> b  &  c > a  =>  c >> b
     )
 end
 
-function exp2_predictions(σ, θ)
+function exp2_predictions(model)
     map(collect(define_trials())) do (k, trials)
-        k => predict_bc_choice(trials...; σ=σ, θ=θ)
+        k => predict_bc_choice(model, trials...)
     end |> Dict
 end
