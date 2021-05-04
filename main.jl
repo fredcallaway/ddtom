@@ -225,7 +225,7 @@ end;
 
 println("Computing expt 2 predictions. Might take a while...")
 Expt_2 = @showprogress pmap(reasonable) do (β, θ)
-    prediction = rescale(exp2_predictions(DDM(θ, β)))
+    prediction = Dict(exp2_keys .=> rescale(exp2_predictions(DDM(θ, β))))
     (;β, θ, prediction)
 end;
 
