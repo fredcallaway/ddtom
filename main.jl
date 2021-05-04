@@ -76,7 +76,7 @@ end
 exp2_keys = ["AA", "BC", "BA", "AC"]
 exp2_targets = [data["Expt_2"][x] for x in exp2_keys]
 
-rescale(r) = [1 - r[:AA], r[:BC], r[:BA], 1-r[:AC]] .* 100
+@everywhere rescale(r) = [1 - r[:AA], r[:BC], r[:BA], 1-r[:AC]] .* 100
 exp2_predict(model) = rescale(exp2_results[findfirst(isequal((model.β, model.θ)), grid)])
 exp2_loss(β, θ) = sse(exp2_predict(DDM(θ, β)), exp2_targets)
 
@@ -187,8 +187,6 @@ plaus = @showprogress pmap(big_grid) do (β, θ)
     data_plausible(β, θ)
 end
 
-simulate(DDM(θ, β), 1.)
-
 acc = @showprogress pmap(big_grid) do (β, θ)
     reasonable_accuracy(β, θ)
 end
@@ -211,20 +209,23 @@ end
 figure("plausibility", dpi=500) do
     make_heat(plaus, "#81C0FF")
     make_heat(acc, "#FFE783")
-    make_heat(acc .& plaus, "#62D762")
+    make_heat(acc .& plaus, "#7DE87D")
 end
 
 # %% --------
 # Compute predictions
 
+
+
 Expt_1 = map(reasonable) do (β, θ)
+    α = exp1_loss(β, θ).α
     prediction = Dict(exp1_keys .=> exp1_predict(DDM(θ, β), α))
-    (;β, θ, prediction)
+    (;β, θ, α, prediction)
 end;
 
 println("Computing expt 2 predictions. Might take a while...")
 Expt_2 = @showprogress pmap(reasonable) do (β, θ)
-    prediction = exp2_predictions(DDM(θ, β))
+    prediction = rescale(exp2_predictions(DDM(θ, β)))
     (;β, θ, prediction)
 end;
 
@@ -234,8 +235,11 @@ filter!(grid3) do (β, θlo, θhi)
 end
 
 Exp_3 = map(grid3) do (β, θlo, θhi)
+    α = optimize(0, 500) do α
+        exp3_loss(β, θlo, θhi, α)
+    end |> Optim.minimizer
     prediction = Dict(exp3_keys .=> exp3_predict(β, θlo, θhi, α))
-    (;β, θ, prediction)
+    (;β, θ, α, prediction)
 end
 
 predictions = (;Expt_1, Expt_2, Exp_3)

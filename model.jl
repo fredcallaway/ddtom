@@ -56,7 +56,7 @@ function prior(pref)
     pdf(Normal(0, √2), pref)  # N(0, 1) - N(0, 1)
 end
 
-"unnormalized p(pref, threshold | rt, choice)"
+"unnormalized p(pref | rt, choice)"
 function posterior(model::Model, obs::Observation, pref)
     likelihood(model, obs, pref) * prior(pref)
 end
