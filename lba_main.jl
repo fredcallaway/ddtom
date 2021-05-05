@@ -58,20 +58,55 @@ models = map(xs[is_reasonable]) do x
 end
 
 # %% ==================== Experiment 1 ====================
-exp1_rts = [3,5,7,9]
-exp1_keys = ["$(t)sec" for t in exp1_rts]
-exp1_targets = [data["Expt_1"][k] for k in exp1_keys]
 
-exp1_predict(model::Model, α) = α .* posterior_mean_pref.([model], exp1_rts)
+@everywhere begin
+    exp1_rts = [3,5,7,9]
+    exp1_keys = ["$(t)sec" for t in exp1_rts]
+    exp1_targets = [data["Expt_1"][k] for k in exp1_keys]
+    exp1_predict(model::Model, α) = α .* posterior_mean_pref.([model], exp1_rts)
+end
 
+exp1_loss = @showprogress pmap(models) do model
+    res = optimize(0, 500) do α
+        sse(exp1_predict(model, α), exp1_targets)
+    end
+    res.minimum
+end
+rank = sortperm(exp1_loss)
+
+# %% --------
 e1 = exp1_predict(model, 100.)
 @assert issorted(e1; rev=true)
 
 # %% ==================== Experiment 2 ====================
 
-e2 = (;exp2_predictions(model)...)
+e2 = @showprogress pmap(models[rank[1:500]]) do model
+    exp2_predictions(model; choice=false)
+end
+# %% --------
+
+rescale(r) = [1 - r[:AA], r[:BC], r[:BA], 1-r[:AC]] .* 100
+exp2_keys = ["AA", "BC", "BA", "AC"]
+exp2_targets = [data["Expt_2"][x] for x in exp2_keys]
+
+exp2_loss = map(e2) do d
+    sse(rescale(d), exp2_targets)
+end
+
+findmin(exp2_loss)
+
+
+# %% --------
+using SplitApplyCombine
+R = invert([(;e...) for e in e2])
 
 # How often is each choice in the predicted direction?
+@show mean(R.AA .< 0.5)
+@show mean(R.BC .> 0.5)  # This one is weird, see below:
+@show mean(R.BA .> 0.5)
+@show mean(R.AC .< 0.5)
+
+
 @assert e2.AA .< 0.5
 @assert e2.BC .> 0.5
 @assert e2.BA .> 0.5

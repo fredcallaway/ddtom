@@ -74,8 +74,8 @@ function define_trials(fast=3., slow=9.)
     )
 end
 
-function exp2_predictions(model)
+function exp2_predictions(model; choice=true)
     map(collect(define_trials())) do (k, trials)
-        k => predict_bc_choice(model, trials...)
+        k => predict_bc_choice(model, trials...; choice)
     end |> Dict
 end
