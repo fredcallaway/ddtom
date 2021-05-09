@@ -43,7 +43,11 @@ function make_abc_posterior(model, ab_trial, bc_trial)
     end
     
     # estimate the normalizing constant
-    Z, ε = hcubature(score, make_bounds()...)
+    Z, ε = hcubature(score, make_bounds()..., abstol=1e-5, maxevals=10^7)
+    if ε > 1e-3
+        @error "abc_posterior: integral did not converge" model ab_trial bc_trial
+        return NaN
+    end
     
     function posterior(a, b, c)
         score((a, b, c)) / Z
@@ -58,7 +62,7 @@ function predict_bc_choice(model, ab_trial, bc_trial; choice=true)
         post(a,b,c) * likelihood(model, Observation(choice, rt), b - c)
     end
     if ε > 1e-3
-        @error "Integral did not converge" model ab_trial bc_trial
+        @error "predict_bc_choice: integral did not converge" model ab_trial bc_trial
         return NaN
     end
     return Z

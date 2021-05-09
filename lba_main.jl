@@ -2,6 +2,8 @@
 using JSON
 using Sobol
 using ProgressMeter
+using SplitApplyCombine
+using Printf
 
 @everywhere begin
     includet("model.jl")
@@ -30,35 +32,52 @@ data = JSON.parsefile("results/trends_to_fit.json")
     return (ε < abstol && p2 > plausible)
 end
 
-
 @everywhere function reasonable_accuracy(model; lo=0.55, hi=0.95, N=1000)
     accuracy = map(randn(N)) do x
        simulate(model, abs(x)).choice == 1
     end |> mean
-    0.55 < accuracy < 0.95    
+    lo < accuracy < hi
+end
+
+@everywhere function low_nochoice_rate(model; max_rate=0.05 , N=1000)
+    nochoice_rate = map(randn(N)) do x
+       simulate(model, abs(x)).choice == 0
+    end |> mean
+    nochoice_rate < max_rate
 end
 
 # %% --------
-
-N = 100000
-@everywhere box = Box(
-    β = (0, 1),
-    β0 = (0, 1),
-    θ = (0, 2),
-    A = (0, 2),
-    sv = (0, 1),
+box = Box(
+    β = (0, 10),
+    β0 = (0, 10),
+    θ = (0, 100),
+    A = (0, 100),
+    sv = 1,
 )
+# %% --------
+N = 10000
 xs = Iterators.take(SobolSeq(n_free(box)), N) |> collect
-is_reasonable = @showprogress pmap(xs) do x
+is_reasonable = @showprogress map(xs) do x
     model = LBA(;box(x)...)
-    data_plausible(model) && reasonable_accuracy(model)
+    model.A < model.θ
+    data_plausible(model) && reasonable_accuracy(model) && low_nochoice_rate(model)
 end
+@show mean(is_reasonable)
+
 models = map(xs[is_reasonable]) do x
     LBA(;box(x)...)
 end
+@show length(models)
+
+println("Reasonable ranges")
+foreach(keys(box.dims), invert(xs[is_reasonable])) do k, x
+    x = rescale(box[k], x)
+    @printf "%2s   %1.3f %1.3f\n" k quantile(x, .01) quantile(x, .99)
+end
+
+cor(combinedims(xs[is_reasonable])')
 
 # %% ==================== Experiment 1 ====================
-
 @everywhere begin
     exp1_rts = [3,5,7,9]
     exp1_keys = ["$(t)sec" for t in exp1_rts]
@@ -66,23 +85,64 @@ end
     exp1_predict(model::Model, α) = α .* posterior_mean_pref.([model], exp1_rts)
 end
 
-exp1_loss = @showprogress pmap(models) do model
-    res = optimize(0, 500) do α
+Expt_1 = @showprogress pmap(models) do model
+    α = optimize(0, 500) do α
         sse(exp1_predict(model, α), exp1_targets)
-    end
-    res.minimum
+    end |> Optim.minimizer
+    prediction = Dict(exp1_keys .=> exp1_predict(model, α))
+    (;prediction)
+end;
+
+pass_expt1 = map(Expt_1) do res
+    issorted([res.prediction[k] for k in exp1_keys]; rev=true)
 end
-rank = sortperm(exp1_loss)
+weird_models = models[.!pass_expt1]
+# %% --------
+map(Expt_1[.!pass_expt1]) do res
+    x = [res.prediction[k] for k in exp1_keys]
+    x
+end
 
 # %% --------
-e1 = exp1_predict(model, 100.)
-@assert issorted(e1; rev=true)
+model = weird_models[3]
+
+x = 3:.1:10
+y = @showprogress map(x) do rt
+    posterior_mean_pref(model, rt)
+end
+figure() do
+    plot(x, y)
+end
+# %% --------
+x = 3:.1:10
+figure() do
+    foreach(0:0.2:1) do vd
+        y = @showprogress map(x) do rt
+            likelihood(model, Observation(true, rt), vd)
+        end
+        plot!(x, y)
+    end
+end
+
+# %% --------
+
+x = -3:.1:3
+map(x) do vd
+    likelihood(model, Observation(true, vd))
+
+
+
 
 # %% ==================== Experiment 2 ====================
 
-e2 = @showprogress pmap(models[rank[1:500]]) do model
+choose_first = @showprogress pmap(models) do model
+    exp2_predictions(model; choice=true)
+end
+
+choose_second = @showprogress pmap(models) do model
     exp2_predictions(model; choice=false)
 end
+
 # %% --------
 
 rescale(r) = [1 - r[:AA], r[:BC], r[:BA], 1-r[:AC]] .* 100
@@ -93,7 +153,7 @@ exp2_loss = map(e2) do d
     sse(rescale(d), exp2_targets)
 end
 
-findmin(exp2_loss)
+# findmin(exp2_loss)
 
 
 # %% --------
@@ -137,3 +197,24 @@ e3 = Dict(exp3_keys .=> exp3_predict(1.9, 2.1))
 @assert e3["thLo9"] < e3["thLo3"]
 @assert e3["thHi9"] < e3["thHi3"]
 @assert e3["thHi3"] - e3["thHi9"] > e3["thLo3"] - e3["thLo9"]
+
+
+# %% ==================== GP minimize ====================
+exp2_predict(model) = rescale(exp2_predictions(model))
+
+x = exp2_predict(model)
+
+include("gp_min.jl")
+result_gp = gp_minimize(length(box); iterations=1000, verbose=true) do x
+    model = LBA(;box(x)...)
+    e1_loss = optimize(0, 500) do α
+        sse(exp1_predict(model, α), exp1_targets)
+    end |> Optim.minimum
+
+    e2_loss = sse(exp2_predict(model), exp2_targets)
+
+    √(e1_loss + e2_loss) / 10
+end
+
+
+

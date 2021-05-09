@@ -176,7 +176,7 @@ end
     accuracy = map(randn(N)) do x
        simulate(DDM(θ, β), abs(x)).choice
     end |> mean
-    0.55 < accuracy < 0.95    
+    lo < accuracy < hi
 end
 
 big_βs = 10 .^ (-2:.1:1)
@@ -206,6 +206,7 @@ function make_heat(X, color)
         cbar=false, grid=false, framestyle=:box
     )
 end
+
 figure("plausibility", dpi=500) do
     make_heat(plaus, "#81C0FF")
     make_heat(acc, "#FFE783")
