@@ -1,3 +1,4 @@
+include("lba_base.jl")
 
 Base.@kwdef struct LBA <: Model
     β::Float64  # drift slope

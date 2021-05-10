@@ -64,8 +64,9 @@ end
 
 function grid(n::Int, box::Box)
     xs = range(0, 1, length=n)
-    kws = valmap(box.dims) do d
-        [rescale(d, x) for x in xs]
+    X = Iterators.product(repeat([xs], n_free(box))...)
+    map(X) do x
+        box(collect(x))
     end
-    grid(;kws...)
 end
+

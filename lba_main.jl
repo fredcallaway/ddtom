@@ -1,81 +1,161 @@
-@everywhere using Revise
-using JSON
 using Sobol
 using ProgressMeter
 using SplitApplyCombine
 using Printf
 
 @everywhere begin
-    includet("model.jl")
-    includet("lba_base.jl")
-    includet("lba_model.jl")
-    includet("experiment2.jl")
-    includet("box.jl")
-end
-
-data = JSON.parsefile("results/trends_to_fit.json")
-@everywhere data = $data
-@everywhere sse(x, y) = sum((x .- y) .^ 2)
-
-# %% ==================== Find parameters ====================
-
-@everywhere function data_plausible(model; plausible=1e-4, abstol=plausible/10, maxevals=10000)
-    p1, ε = hquadrature(-6, 6; abstol, maxevals) do pref
-        posterior(model, Observation(true, 3.), pref)
-    end
-    (ε < abstol && p1 > plausible) || return false
-
-    p2, ε = hquadrature(-6, 6; abstol, maxevals) do pref
-        posterior(model, Observation(true, 9.), pref)
-    end
-    
-    return (ε < abstol && p2 > plausible)
-end
-
-@everywhere function reasonable_accuracy(model; lo=0.55, hi=0.95, N=1000)
-    accuracy = map(randn(N)) do x
-       simulate(model, abs(x)).choice == 1
-    end |> mean
-    lo < accuracy < hi
-end
-
-@everywhere function low_nochoice_rate(model; max_rate=0.05 , N=1000)
-    nochoice_rate = map(randn(N)) do x
-       simulate(model, abs(x)).choice == 0
-    end |> mean
-    nochoice_rate < max_rate
+    include("fitting.jl")
+    include("lba_model.jl")
 end
 
 # %% --------
 box = Box(
-    β = (0, 10),
-    β0 = (0, 10),
-    θ = (0, 100),
-    A = (0, 100),
+    β = (1, 10, :log),
+    β0 = (1, 10, :log),
+    θ = (10, 100, :log),
+    A = (10, 100, :log),
     sv = 1,
 )
-# %% --------
-N = 10000
-xs = Iterators.take(SobolSeq(n_free(box)), N) |> collect
-is_reasonable = @showprogress map(xs) do x
-    model = LBA(;box(x)...)
-    model.A < model.θ
-    data_plausible(model) && reasonable_accuracy(model) && low_nochoice_rate(model)
-end
-@show mean(is_reasonable)
 
-models = map(xs[is_reasonable]) do x
+@everywhere function full_loss(model)
+    reasonable = data_plausible(model) && reasonable_accuracy(model) && low_nochoice_rate(model)
+    loss1 = loss2 = missing
+    if reasonable 
+        loss1 = exp1_loss(model)
+        if !isnan(loss1)
+            loss2 = exp2_loss(model)
+        end
+    end
+    (;reasonable, loss1, loss2)
+end
+
+
+# %% ==================== Grid ====================
+
+prms = grid(10, box);
+models = map(prms) do x
+    LBA(x...)
+end;
+grid_loss = @showprogress pmap(full_loss, models)
+
+using Serialization
+serialize("tmp/lba_grid", (;box, models, grid_loss))
+
+
+# %% --------
+using Serialization
+using Plots.Measures
+
+include("figure.jl")
+box, models, grid_loss = deserialize("tmp/lba_grid");
+
+L = map(grid_loss) do g
+    g.loss1 + g.loss2
+end;
+
+L[ismissing.(L)] .= Inf
+L[isnan.(L)] .= Inf
+
+ndim = 4
+juxt(fs...) = x -> Tuple(f(x) for f in fs)
+Base.dropdims(idx::Int...) = X -> dropdims(X, dims=idx)
+varnames = free(box)
+
+function best(X::Array, dims...; ymax=Inf)
+    drop = [i for i in 1:ndim if i ∉ dims]
+    B = minimum(X; dims=drop)
+    b = permutedims(B, [dims...; drop]) |> dropdims((length(dims)+1:ndim)...)
+    b[b .> ymax] .= NaN
+    b
+end
+
+function get_ticks(i)
+    return 1:10, 1:10
+    idx = 1:7
+    vals = round.(G.dims[i][2]; sigdigits=2)
+    idx[1:3:end], vals[1:3:end]
+end
+
+function plot_grid(X; ymax=Inf)
+    mins, maxs = invert([juxt(minimum, maximum)(best(X, i, j)) for i in 1:ndim for j in i+1:ndim])
+    lims = [minimum(mins), maximum(maxs)]
+
+    if ymax != Inf
+        lims[2] = ymax
+    end
+
+    P = map(1:ndim) do i
+        map(1:ndim) do j
+            if i == j
+                plot(best(X, i), xlabel=varnames[i], ylims=lims, xticks=get_ticks(i))
+            elseif i < j
+                plot(axis=:off, grid=:off)
+            else
+                heatmap(best(X, i, j; ymax=ymax),
+                    xlabel=varnames[j],
+                    ylabel=varnames[i],
+                    xticks=get_ticks(j),
+                    yticks=get_ticks(i),
+                    colorbar=false, clim=Tuple(lims),  aspect_ratio = 1)
+            end
+        end
+    end |> flatten
+
+    plot(P..., size=(1100, 1000), right_margin=4mm)
+end
+
+figure() do
+    plot_grid(L)
+end
+
+
+# %% ==================== Sobol ====================
+
+N = 100000
+xs = Iterators.take(SobolSeq(n_free(box)), N) |> collect
+models = map(xs) do x
     LBA(;box(x)...)
 end
-@show length(models)
+sobol_loss = @showprogress pmap(full_loss, models)
 
-println("Reasonable ranges")
-foreach(keys(box.dims), invert(xs[is_reasonable])) do k, x
-    x = rescale(box[k], x)
-    @printf "%2s   %1.3f %1.3f\n" k quantile(x, .01) quantile(x, .99)
+# %% ====================  ====================
+y = map(sobol_loss) do x
+    l = √(x.loss1 + x.loss2)
+    ismissing(l) ? NaN : l
 end
 
-cor(combinedims(xs[is_reasonable])')
+mean(filter(!isnan, y))
+y[ismissing.(y)] .= 
+mean(skipmissing(y))
+
+# loss12[isnan.(loss12)] .= maximum()
+
+y[isnan.(y)] .= Inf
+
+min_y, min_i = findmin(y)
+
+using Optim
+
+
+# %% --------
+
+model = models[min_i]
+α = optimize_α(model)
+
+θlo, θhi = optimize_θs(model, α)
+
+
+
+# %% ==================== Save predictions ====================
+
+predictions = Dict(
+    "Expt_1" => Dict(exp1_keys .=> exp1_predict(model, α)),
+    "Expt_2" => Dict(exp2_keys .=> exp2_predict(model)),
+    "Exp_3" => Dict(exp3_keys .=> exp3_predict(model, θlo, θhi, α))
+)
+
+write("results/lba_fitted_predictions.json", JSON.json(predictions))
+
 
 # %% ==================== Experiment 1 ====================
 @everywhere begin
@@ -199,22 +279,21 @@ e3 = Dict(exp3_keys .=> exp3_predict(1.9, 2.1))
 @assert e3["thHi3"] - e3["thHi9"] > e3["thLo3"] - e3["thLo9"]
 
 
-# %% ==================== GP minimize ====================
-exp2_predict(model) = rescale(exp2_predictions(model))
+# # %% ==================== GP minimize ====================
+# exp2_predict(model) = rescale(exp2_predictions(model))
 
-x = exp2_predict(model)
+# x = exp2_predict(model)
 
-include("gp_min.jl")
-result_gp = gp_minimize(length(box); iterations=1000, verbose=true) do x
-    model = LBA(;box(x)...)
-    e1_loss = optimize(0, 500) do α
-        sse(exp1_predict(model, α), exp1_targets)
-    end |> Optim.minimum
+# include("gp_min.jl")
+# result_gp = gp_minimize(length(box); iterations=1000, verbose=true) do x
+#     model = LBA(;box(x)...)
+#     e1_loss = optimize(0, 500) do α
+#         sse(exp1_predict(model, α), exp1_targets)
+#     end |> Optim.minimum
 
-    e2_loss = sse(exp2_predict(model), exp2_targets)
+#     e2_loss = sse(exp2_predict(model), exp2_targets)
 
-    √(e1_loss + e2_loss) / 10
-end
-
+#     √(e1_loss + e2_loss) / 10
+# end
 
 
