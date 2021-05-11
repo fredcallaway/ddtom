@@ -1,4 +1,5 @@
 using JSON
+using Sobol
 
 include("model.jl")
 include("experiment2.jl")
@@ -32,20 +33,21 @@ function data_plausible(model; plausible=1e-4, abstol=plausible/10, maxevals=100
     return (ε < abstol && p2 > plausible)
 end
 
-function reasonable_accuracy(model; lo=0.55, hi=0.95, N=1000)
+function reasonable_accuracy(model; lo=0.55, hi=0.95, N=10000)
     accuracy = map(randn(N)) do x
        simulate(model, abs(x)).choice == 1
     end |> mean
     lo < accuracy < hi
 end
 
-function low_nochoice_rate(model; max_rate=0.05 , N=1000)
+function low_nochoice_rate(model; max_rate=0.05 , N=10000)
     nochoice_rate = map(randn(N)) do x
        simulate(model, abs(x)).choice == 0
     end |> mean
     nochoice_rate < max_rate
 end
 
+check_reasonable(model::Model) = data_plausible(model) && reasonable_accuracy(model)
 
 # %% ==================== Experiment 1 ====================
 
@@ -69,7 +71,6 @@ function optimize_α(model, bound=1000)
     α
 end
 
-
 # %% ==================== Experiment 2 ====================
 
 rescale(r) = [1 - r[:AA], r[:BC], r[:BA], 1-r[:AC]] .* 100
@@ -78,7 +79,6 @@ exp2_targets = [data["Expt_2"][x] for x in exp2_keys]
 
 exp2_predict(model::Model) = rescale(exp2_predictions(model))
 exp2_loss(model::Model) = sse(exp2_predict(model), exp2_targets)
-
 
 # %% ==================== Experiment 3 ====================
 
@@ -99,4 +99,40 @@ function optimize_θs(model, α)
     res.minimizer
 end
 
+# %% ==================== Putting it together ====================
+
+function joint_loss(model)
+    reasonable = check_reasonable(model)
+    loss1 = loss2 = missing
+    if reasonable 
+        loss1 = exp1_loss(model)
+        if !isnan(loss1)
+            loss2 = exp2_loss(model)
+        end
+    end
+    (;reasonable, loss1, loss2)
+end
+
+function scalar_loss(jl; replace_nan=Inf)
+    l = √(jl.loss1 + jl.loss2)
+    ismissing(l) || isnan(l) ? replace_nan : l
+end
+
+function sample_models(model_class, box; N=10^(n_free(box) + 1))
+    xs = Iterators.take(SobolSeq(n_free(box)), N) |> collect
+    map(xs) do x
+        model_class(;box(x)...)
+    end
+end
+
+function finetune(model::M, box::Box; g_tol=.05, time_limit=NaN) where M <: Model
+    res = optimize(box(model); g_tol, time_limit) do x
+        model = M(;box(x)...)
+        scalar_loss(joint_loss(model); replace_nan=1000)
+    end
+    if !all(0.1 .< res.minimizer .< 0.9)
+        @warn "Best-fitting value near boundaries!"
+    end
+    M(;box(res.minimizer)...), res.minimum
+end
 

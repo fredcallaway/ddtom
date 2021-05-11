@@ -26,7 +26,7 @@ end
 abstract type Model end
 Base.length(::Model) = 1
 
-struct DDM <: Model
+Base.@kwdef struct DDM <: Model
     θ::Float64  # threshold
     β::Float64  # drift-rate multiplier
 end

@@ -50,11 +50,11 @@ function apply(box::Box, x::Vector{Float64})
     (;prs...)
 end
 
-function apply(box::Box, d::AbstractDict)
+function apply(box::Box, d)
     x = Float64[]
     for (name, dim) in box.dims
         if length(dim) > 1
-            push!(x, unscale(dim, d[name]))
+            push!(x, unscale(dim, getfield(d, name)))
         end
     end
     return x
