@@ -11,13 +11,14 @@ Notation:
 "
 
 using Cubature
-const MAX_SD = 10
+const MAX_SD = 6
 const MAX_RT = 240.
+# const MAX_RT = 240.
 using DataStructures: OrderedDict
 
 function make_bounds(;rt=false)
-    lo = -10 .* ones(3)
-    hi = 10 .* ones(3)
+    lo = -MAX_SD .* ones(3)
+    hi = MAX_SD .* ones(3)
     if rt
         push!(lo, 0.); push!(hi, MAX_RT)
     end
@@ -41,11 +42,11 @@ function make_abc_posterior(model, ab_trial, bc_trial)
     function score((a, b, c))
         abc_prior(a, b, c) * abc_likelihood(model, ab_trial, bc_trial, a, b, c)
     end
-    
+
     # estimate the normalizing constant
-    Z, ε = hcubature(score, make_bounds()..., abstol=1e-5, maxevals=10^7)
-    if ε > 1e-3
-        @error "abc_posterior: integral did not converge" model ab_trial bc_trial
+    Z, ε = hcubature(score, make_bounds()..., maxevals=10^10)
+    if ε > 1e-8  # this one has to be more accurate to ensure predict_bc_choice < 1
+        # @error "abc_posterior: integral did not converge" model ab_trial bc_trial
         return NaN
     end
     
@@ -56,13 +57,13 @@ end
 
 "Probability of choosing b over c given observed choices and rts for (a vs. b) and (a vs. c) "
 function predict_bc_choice(model, ab_trial, bc_trial; choice=true)
-    post = make_abc_posterior(model, ab_trial, bc_trial)
+    post = make_abc_posterior(model, ab_trial, bc_trial)    
 
-    Z, ε = hcubature(make_bounds(rt=true)..., abstol=1e-5, maxevals=10^7) do (a,b,c,rt)
+    Z, ε = hcubature(make_bounds(rt=true)..., abstol=1e-6, maxevals=10^9) do (a,b,c,rt)
         post(a,b,c) * likelihood(model, Observation(choice, rt), b - c)
     end
-    if ε > 1e-3
-        @warn "predict_bc_choice: integral did not converge" model ab_trial bc_trial
+    if ε > 1e-5
+        # @error "predict_bc_choice: integral did not converge" model ab_trial bc_trial
         return NaN
     end
     return Z

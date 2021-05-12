@@ -43,3 +43,8 @@ predictions = Dict(
 
 @assert model isa DDM  # make sure I'm in the right terminal
 write("results/ddm_fitted_predictions.json", JSON.json(predictions))
+
+# %% --------
+
+xt = rescale(exp2_predictions(model))
+xf = rescale(exp2_predictions(model; choice=false))

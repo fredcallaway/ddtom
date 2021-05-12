@@ -62,18 +62,18 @@ function posterior(model::Model, obs::Observation, pref)
 end
 
 function posterior_mean_pref(model::Model, obs::Observation)
-    normalizing_constant, ε = hquadrature(-10, 10; abstol=1e-5, maxevals=10^7) do pref
+    normalizing_constant, ε = hquadrature(-10, 10; abstol=1e-6, maxevals=10^9) do pref
         posterior(model, obs, pref)
     end
-    if ε > 1e-3
-        @error "normalizing_constant: integral did not converge" model obs
+    if ε > 1e-5
+        # @error "normalizing_constant: integral did not converge" model obs
         return NaN
     end
-    v, ε = hquadrature(-10, 10; abstol=1e-5, maxevals=10^7) do pref
+    v, ε = hquadrature(-10, 10; abstol=1e-6, maxevals=10^9) do pref
         posterior(model, obs, pref) / normalizing_constant * pref
     end
-    if ε > 1e-3
-        @error "posterior_mean_pref: integral did not converge" model obs
+    if ε > 1e-5
+        # @error "posterior_mean_pref: integral did not converge" model obs
         return NaN
     end
     v

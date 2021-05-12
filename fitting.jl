@@ -20,7 +20,7 @@ end
 
 # %% ==================== Reasonable parameter check ====================
 
-function data_plausible(model; plausible=1e-4, abstol=plausible/10, maxevals=10000)
+function data_plausible(model; plausible=1e-4, abstol=plausible/100, maxevals=100000)
     p1, ε = hquadrature(-6, 6; abstol, maxevals) do pref
         posterior(model, Observation(true, 3.), pref)
     end
