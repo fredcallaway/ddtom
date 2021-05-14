@@ -11,9 +11,10 @@ Notation:
 "
 
 using Cubature
-const MAX_SD = 3
-const MAX_RT = 30.
+const MAX_SD = 4
+const MAX_RT = 60.
 using DataStructures: OrderedDict
+using Interpolations
 
 function make_bounds(;rt=false)
     lo = -MAX_SD .* ones(3)
@@ -55,8 +56,8 @@ function make_abc_posterior(model, ab_trial, bc_trial)
 end
 
 "Probability of choosing b over c given observed choices and rts for (a vs. b) and (a vs. c) "
-function predict_bc_choice(model, ab_trial, bc_trial; choice=true, new=false)
-    new &&return predict_bc_choice_new(model, ab_trial, bc_trial; choice)
+function predict_bc_choice(model, ab_trial, bc_trial; choice=true, new=true)
+    new && return predict_bc_choice_new(model, ab_trial, bc_trial; choice)
     post = make_abc_posterior(model, ab_trial, bc_trial)
 
     Z, ε = hcubature(make_bounds(rt=true)..., abstol=1e-6, maxevals=10^9) do (a,b,c,rt)
@@ -82,7 +83,7 @@ function make_choice_curve(model; choice=true)
 end
 
 function get_prob_bc(post, b, c)
-    hquadrature(-MAX_SD, MAX_SD) do a
+    hquadrature(-MAX_SD, MAX_SD, abstol=1e-8) do a
         post(a, b, c)
     end |> first
 end
@@ -91,10 +92,26 @@ function predict_bc_choice_new(model, ab_trial, bc_trial; choice=true)
     post = make_abc_posterior(model, ab_trial, bc_trial)
     p_choose = make_choice_curve(model; choice)
 
-    Z, ε = hcubature(-MAX_SD * ones(2), MAX_SD * ones(2), maxevals=14000) do (b, c)
-        get_prob_bc(post, b, c) * p_choose(b - c)
+    Z, ε = hcubature(-MAX_SD * ones(2), MAX_SD * ones(2), abstol=1e-4) do (b, c)
+        p = p_choose(b - c)
+        get_prob_bc(post, b, c) * p
     end
-    if ε > 1e-5
+    if ε > 1e-3
+        @show Z ε
+        # @error "predict_bc_choice: integral did not converge" model ab_trial bc_trial
+        return NaN
+    end
+    return Z
+end
+
+function predict_bc_choice_three(model, ab_trial, bc_trial; choice=true)
+    post = make_abc_posterior(model, ab_trial, bc_trial)
+    p_choose = make_choice_curve(model; choice)
+
+    Z, ε = hcubature(-MAX_SD * ones(3), MAX_SD * ones(3), abstol=1e-4) do (a, b, c)
+        post(a, b, c) * p_choose(b - c)
+    end
+    if ε > 1e-3
         @show Z ε
         # @error "predict_bc_choice: integral did not converge" model ab_trial bc_trial
         return NaN
@@ -113,7 +130,7 @@ function define_trials(fast=3., slow=9.)
     )
 end
 
-function exp2_predictions(model; choice=true, new=false)
+function exp2_predictions(model; choice=true, new=true)
     map(collect(define_trials())) do (k, trials)
         k => predict_bc_choice(model, trials...; choice, new)
     end |> Dict
