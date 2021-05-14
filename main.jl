@@ -6,8 +6,8 @@ using Printf
 @everywhere include("fitting.jl")
 
 # %% ==================== Sobol ====================
-βs = 0.1:0.1:1
-θs = (0.2:0.2:3)
+# βs = 0.1:0.1:1
+# θs = (0.2:0.2:3)
 
 @everywhere box = Box(
     β = (.01, 10, :log),
@@ -41,7 +41,7 @@ predictions = Dict(
     "Exp_3" => Dict(exp3_keys .=> exp3_predict(model, θlo, θhi, α))
 )
 
-@assert model isa DDM  # make sure I'm in the right terminal
+@assert model isa DDM  # make sure I'm in the right terminal heheh
 write("results/ddm_fitted_predictions.json", JSON.json(predictions))
 
 # %% --------

@@ -5,7 +5,7 @@ include("model.jl")
 include("experiment2.jl")
 include("box.jl")
 
-data = JSON.parsefile("results/trends_to_fit.json")
+data = JSON.parsefile("trends_to_fit.json")
 
 sse(x, y) = sum((x .- y) .^ 2)
 
@@ -33,21 +33,28 @@ function data_plausible(model; plausible=1e-4, abstol=plausible/100, maxevals=10
     return (ε < abstol && p2 > plausible)
 end
 
-function reasonable_accuracy(model; lo=0.55, hi=0.95, N=10000)
+function reasonable_accuracy(model; lo=0.55, hi=0.95, N=100000)
     accuracy = map(randn(N)) do x
        simulate(model, abs(x)).choice == 1
     end |> mean
     lo < accuracy < hi
 end
 
-function low_nochoice_rate(model; max_rate=0.05 , N=10000)
+function reasonable_rt(model; lo=0.05, hi=120, N=10000)
+    rt = map(randn(N)) do x
+       simulate(model, abs(x)).rt
+    end
+    lo < quantile(rt, 0.01) && quantile(rt, .99) < hi
+end
+
+function low_nochoice_rate(model; max_rate=0.05 , N=100000)
     nochoice_rate = map(randn(N)) do x
        simulate(model, abs(x)).choice == 0
     end |> mean
     nochoice_rate < max_rate
 end
 
-check_reasonable(model::Model) = data_plausible(model) && reasonable_accuracy(model)
+check_reasonable(model::Model) = reasonable_rt(model) && reasonable_accuracy(model)
 
 # %% ==================== Experiment 1 ====================
 
