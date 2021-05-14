@@ -11,9 +11,8 @@ Notation:
 "
 
 using Cubature
-const MAX_SD = 6
-const MAX_RT = 240.
-# const MAX_RT = 240.
+const MAX_SD = 3
+const MAX_RT = 30.
 using DataStructures: OrderedDict
 
 function make_bounds(;rt=false)
@@ -56,8 +55,9 @@ function make_abc_posterior(model, ab_trial, bc_trial)
 end
 
 "Probability of choosing b over c given observed choices and rts for (a vs. b) and (a vs. c) "
-function predict_bc_choice(model, ab_trial, bc_trial; choice=true)
-    post = make_abc_posterior(model, ab_trial, bc_trial)    
+function predict_bc_choice(model, ab_trial, bc_trial; choice=true, new=false)
+    new &&return predict_bc_choice_new(model, ab_trial, bc_trial; choice)
+    post = make_abc_posterior(model, ab_trial, bc_trial)
 
     Z, ε = hcubature(make_bounds(rt=true)..., abstol=1e-6, maxevals=10^9) do (a,b,c,rt)
         post(a,b,c) * likelihood(model, Observation(choice, rt), b - c)
@@ -69,6 +69,40 @@ function predict_bc_choice(model, ab_trial, bc_trial; choice=true)
     return Z
 end
 
+function make_choice_curve(model; choice=true)
+    x = .01:.01:2MAX_SD
+    p = map(x) do pref
+        v, ε = hquadrature(0, MAX_RT) do rt
+            likelihood(model, Observation(choice, rt), pref)
+        end
+        @assert ε < 1e-8
+        v
+    end
+    LinearInterpolation(-2MAX_SD:.01:2MAX_SD, [reverse(1 .- p); 0.5; p])
+end
+
+function get_prob_bc(post, b, c)
+    hquadrature(-MAX_SD, MAX_SD) do a
+        post(a, b, c)
+    end |> first
+end
+
+function predict_bc_choice_new(model, ab_trial, bc_trial; choice=true)
+    post = make_abc_posterior(model, ab_trial, bc_trial)
+    p_choose = make_choice_curve(model; choice)
+
+    Z, ε = hcubature(-MAX_SD * ones(2), MAX_SD * ones(2), maxevals=14000) do (b, c)
+        get_prob_bc(post, b, c) * p_choose(b - c)
+    end
+    if ε > 1e-5
+        @show Z ε
+        # @error "predict_bc_choice: integral did not converge" model ab_trial bc_trial
+        return NaN
+    end
+    return Z
+end
+
+
 function define_trials(fast=3., slow=9.)
     # first choice between A and B, second between A and C
     OrderedDict(
@@ -79,8 +113,8 @@ function define_trials(fast=3., slow=9.)
     )
 end
 
-function exp2_predictions(model; choice=true)
+function exp2_predictions(model; choice=true, new=false)
     map(collect(define_trials())) do (k, trials)
-        k => predict_bc_choice(model, trials...; choice)
+        k => predict_bc_choice(model, trials...; choice, new)
     end |> Dict
 end
