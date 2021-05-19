@@ -1,4 +1,3 @@
-
 Base.@kwdef struct DDMStarting <: Model
     θ::Float64  # threshold
     β::Float64  # drift-rate multiplier
@@ -29,5 +28,3 @@ function simulate(model::DDMStarting, pref, starting=rand(Uniform(-model.sz, mod
     rt, choice = rand(sampler(dd, bb))
     Observation(choice, rt)
 end
-
-

@@ -8,7 +8,6 @@ using Distributed
     check_reasonable(model::LBA) = check_reasonable_base(model) && low_nochoice_rate(model)
 end
 
-
 # %% ==================== Sobol ====================
 
 box = Box(
@@ -51,4 +50,3 @@ write("results/lba_fitted_predictions.json", JSON.json(predictions))
 
 using Serialization
 serialize("tmp/lba_fit", model)
-

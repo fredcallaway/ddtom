@@ -1,7 +1,6 @@
 using Sobol
 using ProgressMeter
 using SplitApplyCombine
-using Printf
 @everywhere using Random
 using Distributed
 
@@ -10,6 +9,7 @@ include("figure.jl")
 
 DISABLE_PLOTTING = false
 pyplot()
+mkpath("figs")
 
 # %% ==================== Identify reasonable paramaters ====================
 @everywhere Random.seed!(123)
@@ -66,7 +66,6 @@ end;
 end |> all
 
 # %% ==================== Experiment 2 ====================
-@everywhere include("fitting.jl")
 
 Expt_2 = @showprogress pmap(models) do model
     prediction = Dict(exp2_keys .=> rescale(exp2_predictions(model)))
@@ -95,6 +94,7 @@ filter!(grid3) do (β, θlo, θhi)
     θhi > θlo && (β, θlo) in reasonable && (β, θhi) in reasonable
 end
 
+# Exp (instead of Expt) was an unfortunate early established standard
 Exp_3 = map(grid3) do (β, θlo, θhi)
     model = DDM(;β, θ=NaN)
     α = optimize(0, 500) do α

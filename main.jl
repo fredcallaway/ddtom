@@ -5,8 +5,6 @@ using Distributed
 @everywhere include("fitting.jl")
 
 # %% ==================== Sobol ====================
-# βs = 0.1:0.1:1
-# θs = (0.2:0.2:3)
 
 @everywhere box = Box(
     β = (.01, 10, :log),
