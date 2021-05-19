@@ -1,14 +1,13 @@
-using Sobol
 using ProgressMeter
 using SplitApplyCombine
-using Printf
+using Distributed
 
 @everywhere begin
     include("fitting.jl")
     include("lba_model.jl")
-    check_reasonable(model::LBA) = 
-        data_plausible(model) && reasonable_accuracy(model) && low_nochoice_rate(model)
+    check_reasonable(model::LBA) = check_reasonable_base(model) && low_nochoice_rate(model)
 end
+
 
 # %% ==================== Sobol ====================
 
@@ -49,3 +48,7 @@ predictions = Dict(
 
 @assert model isa LBA  # make sure I'm in the right terminal
 write("results/lba_fitted_predictions.json", JSON.json(predictions))
+
+using Serialization
+serialize("tmp/lba_fit", model)
+

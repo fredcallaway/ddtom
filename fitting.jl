@@ -33,28 +33,32 @@ function data_plausible(model; plausible=1e-4, abstol=plausible/100, maxevals=10
     return (ε < abstol && p2 > plausible)
 end
 
-function reasonable_accuracy(model; lo=0.55, hi=0.95, N=100000)
+
+
+function reasonable_accuracy(model; lo=0.55, hi=0.95, N=10^6)
     accuracy = map(randn(N)) do x
        simulate(model, abs(x)).choice == 1
     end |> mean
     lo < accuracy < hi
 end
 
-function reasonable_rt(model; lo=0.05, hi=120, N=10000)
+function reasonable_rt(model; lo=0.05, hi=120, N=10^6)
     rt = map(randn(N)) do x
        simulate(model, abs(x)).rt
     end
     lo < quantile(rt, 0.01) && quantile(rt, .99) < hi
 end
 
-function low_nochoice_rate(model; max_rate=0.05 , N=100000)
+
+function low_nochoice_rate(model; max_rate=0.05 , N=10^6)
     nochoice_rate = map(randn(N)) do x
        simulate(model, abs(x)).choice == 0
     end |> mean
     nochoice_rate < max_rate
 end
 
-check_reasonable(model::Model) = reasonable_rt(model) && reasonable_accuracy(model)
+check_reasonable_base(model::Model) = reasonable_rt(model) && reasonable_accuracy(model)
+check_reasonable(model::Model) = check_reasonable_base(model)
 
 # %% ==================== Experiment 1 ====================
 

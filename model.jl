@@ -39,8 +39,7 @@ end
 
 "p(rt, choice | pref)"
 function likelihood(model::DDM, obs::Observation, pref)
-    dd = ConstDrift(model.β * pref, dt)
-    bb = ConstSymBounds(model.θ, dt)
+    dd, bb = build(model, pref)
     rt_pdf = obs.choice ? pdfu : pdfl   # RT pdf for upper (choice=1) or lower threshold
     rt_pdf(dd, bb, obs.rt)
 end

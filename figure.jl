@@ -2,11 +2,11 @@ using Plots
 using Dates
 mkpath("fighist")
 ENV["GKSwstype"]="nul"
-gr(label="", dpi=200, size=(400,300))
+gr(label="", dpi=500, size=(400,300))
 
 DISABLE_PLOTTING = false
 
-function figure(f, name="tmp"; kws...)
+function figure(f, name="tmp"; pdf=false, kws...)
     DISABLE_PLOTTING && return
     plot(;kws...)
     f()
@@ -15,5 +15,8 @@ function figure(f, name="tmp"; kws...)
     savefig(p)
     if name != "tmp"
         cp(p, "figs/$name.png"; force=true)
+    end
+    if pdf
+        savefig("figs/$name.pdf")
     end
 end

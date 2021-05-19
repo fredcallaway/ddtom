@@ -1,7 +1,6 @@
-using Sobol
 using ProgressMeter
 using SplitApplyCombine
-using Printf
+using Distributed
 
 @everywhere include("fitting.jl")
 
@@ -44,7 +43,5 @@ predictions = Dict(
 @assert model isa DDM  # make sure I'm in the right terminal heheh
 write("results/ddm_fitted_predictions.json", JSON.json(predictions))
 
-# %% --------
-
-xt = rescale(exp2_predictions(model))
-xf = rescale(exp2_predictions(model; choice=false))
+using Serialization
+serialize("tmp/ddm_fit", model)

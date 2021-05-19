@@ -2,33 +2,35 @@ using Sobol
 using ProgressMeter
 using SplitApplyCombine
 using Printf
-using Random
+@everywhere using Random
+using Distributed
 
 @everywhere include("fitting.jl")
 include("figure.jl")
-# DISABLE_PLOTTING = false
-# pyplot()
+
+DISABLE_PLOTTING = false
+pyplot()
 
 # %% ==================== Identify reasonable paramaters ====================
-Random.seed!(123)
+@everywhere Random.seed!(123)
 
 big_βs = 10 .^ (-2:.1:1)
 big_θs = 10 .^ (-1:0.1:2)
 big_grid = collect(Iterators.product(big_βs, big_θs))
 
-plaus = @showprogress map(big_grid) do (β, θ)
-    data_plausible(DDM(;β, θ))
-end
+# plaus = @showprogress map(big_grid) do (β, θ)
+#     data_plausible(DDM(;β, θ))
+# end
 
 rt = @showprogress pmap(big_grid) do (β, θ)
-    reasonable_rt(DDM(;β, θ); N=10^6)
+    reasonable_rt(DDM(;β, θ))
 end
 
 acc = @showprogress pmap(big_grid) do (β, θ)
-    reasonable_accuracy(DDM(;β, θ); N=10^6)
+    reasonable_accuracy(DDM(;β, θ))
 end
 
-reasonable = big_grid[acc .& plaus]
+reasonable = big_grid[acc .& rt]
 models = map(reasonable) do (β, θ)
     DDM(;β, θ)
 end
@@ -81,6 +83,9 @@ end |> invert
 @assert all(50 .< R.BA .< 100)
 @assert all(50 .< R.AC .< 100)
 
+# equivalent conditions
+@assert R.AA ≈ R.BC
+@assert R.BA ≈ R.AC
 
 # %% ==================== Experiment 3 ====================
 
@@ -91,25 +96,34 @@ filter!(grid3) do (β, θlo, θhi)
 end
 
 Exp_3 = map(grid3) do (β, θlo, θhi)
+    model = DDM(;β, θ=NaN)
     α = optimize(0, 500) do α
-        exp3_loss(β, θlo, θhi, α)
+        exp3_loss(model, θlo, θhi, α)
     end |> Optim.minimizer
-    prediction = Dict(exp3_keys .=> exp3_predict(β, θlo, θhi, α))
-    (;β, θ, α, prediction)
+    prediction = Dict(exp3_keys .=> exp3_predict(model, θlo, θhi, α))
+    (;β, θlo, θhi, α, prediction)
 end
 
 
 # %% --------
-# All the differences and interaction are in the predicted direction
-@assert map(Exp_3) do res
+# All the differences are in the predicted direction
+@assert all(Exp_3) do res
     x = res.prediction
     x["thLo9"] < x["thHi9"] &&
     x["thLo3"] < x["thHi3"] &&
     x["thLo9"] < x["thLo3"] &&
-    x["thHi9"] < x["thHi3"] &&
-    x["thHi3"] - x["thHi9"] > x["thLo3"] - x["thLo9"]
-end |> all
+    x["thHi9"] < x["thHi3"]
+end
 
+n_interact = map(Exp_3) do res
+    x = res.prediction
+    x["thHi3"] - x["thHi9"] > x["thLo3"] - x["thLo9"]
+end |> sum
+
+println("$n_interact / $(length(Exp_3)) have the interaction" )
+
+
+# %% --------
 
 predictions = (;Expt_1, Expt_2, Exp_3)
 
