@@ -3,6 +3,8 @@ using SplitApplyCombine
 using Distributed
 
 @everywhere include("fitting.jl")
+mkpath("results")
+mkpath("tmp")
 
 # %% ==================== Sobol ====================
 

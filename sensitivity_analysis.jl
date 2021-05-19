@@ -66,7 +66,6 @@ end;
 end |> all
 
 # %% ==================== Experiment 2 ====================
-
 Expt_2 = @showprogress pmap(models) do model
     prediction = Dict(exp2_keys .=> rescale(exp2_predictions(model)))
     (;model.β, model.θ, prediction)
@@ -76,18 +75,17 @@ R = map(Expt_2) do x
    (;Dict(Symbol(k) => v for (k, v) in pairs(x.prediction))...)
 end |> invert
 
-# How often is each choice in the predicted direction?
+# All choices in the predicted direction
 @assert all(50 .< R.AA .< 100)
 @assert all(50 .< R.BC .< 100)
 @assert all(50 .< R.BA .< 100)
 @assert all(50 .< R.AC .< 100)
 
-# equivalent conditions
+# Equivalent conditions are equivalent
 @assert R.AA ≈ R.BC
 @assert R.BA ≈ R.AC
 
 # %% ==================== Experiment 3 ====================
-
 
 grid3 = collect(Iterators.product(big_βs, big_θs, big_θs))[:]
 filter!(grid3) do (β, θlo, θhi)
@@ -103,7 +101,6 @@ Exp_3 = map(grid3) do (β, θlo, θhi)
     prediction = Dict(exp3_keys .=> exp3_predict(model, θlo, θhi, α))
     (;β, θlo, θhi, α, prediction)
 end
-
 
 # %% --------
 # All the differences are in the predicted direction

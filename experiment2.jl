@@ -25,6 +25,10 @@ function make_bounds(;rt=false)
     lo, hi
 end
 
+function hcubature_m(f::Function, fdim::Integer, xmin, xmax; kws...)
+    hcubature(fdim, f, xmin, xmax;  kws...)
+end
+
 "Likelihood of observed choice and RT for choices between (a and b) and (a and c)"
 function abc_likelihood(model::Model, ab_trial::Observation, bc_trial::Observation, a, b, c)
     likelihood(model, ab_trial, a - b) * likelihood(model, bc_trial, a - c)
@@ -36,44 +40,13 @@ function abc_prior(a, b, c)
     pdf(d, a) * pdf(d, b) * pdf(d, c)
 end
 
-"Computes the posterior distribution for abc_likelihood"
-function make_abc_posterior(model, ab_trial, bc_trial; normalize=true)
-    # unnormalized posterior
-    function score((a, b, c))
-        abc_prior(a, b, c) * abc_likelihood(model, ab_trial, bc_trial, a, b, c)
-    end
-    !normalize && return function unnorm_posterior(a, b, c)
-        1e7 * score((a,b,c))
-    end
-
-    # estimate the normalizing constant
-    Z, ε = hcubature(score, make_bounds()..., maxevals=10^10)
-    if ε > 1e-8  # this one has to be more accurate to ensure predict_bc_choice < 1
-        # @error "abc_posterior: integral did not converge" model ab_trial bc_trial
-        return NaN
-    end
-    
-    function posterior(a, b, c)
-        score((a, b, c)) / Z
-    end
+"Computes the unnormalized posterior distribution for abc_likelihood"
+function abc_posterior(model::Model, ab_trial::Observation, bc_trial::Observation, a, b, c)
+    # the 1e7 improves numerical stability (I think)
+    1e7 * abc_prior(a, b, c) * abc_likelihood(model, ab_trial, bc_trial, a, b, c)
 end
 
-"Probability of choosing b over c given observed choices and rts for (a vs. b) and (a vs. c) "
-function predict_bc_choice(model, ab_trial, bc_trial; choice=true, new=true)
-    return predict_bc_choice_three(model, ab_trial, bc_trial; choice)
-    new && return predict_bc_choice_new(model, ab_trial, bc_trial; choice)
-    post = make_abc_posterior(model, ab_trial, bc_trial)
-
-    Z, ε = hcubature(make_bounds(rt=true)..., abstol=1e-6, maxevals=10^9) do (a,b,c,rt)
-        post(a,b,c) * likelihood(model, Observation(choice, rt), b - c)
-    end
-    if ε > 1e-5
-        # @error "predict_bc_choice: integral did not converge" model ab_trial bc_trial
-        return NaN
-    end
-    return Z
-end
-
+"Approximates p(choice | pref) with a dense linear interpolation"
 function make_choice_curve(model; choice=true)
     x = .01:.01:2MAX_SD
     p = map(x) do pref
@@ -86,62 +59,33 @@ function make_choice_curve(model; choice=true)
     LinearInterpolation(-2MAX_SD:.01:2MAX_SD, [reverse(1 .- p); 0.5; p])
 end
 
-function get_prob_bc(post, b, c)
-    hquadrature(-MAX_SD, MAX_SD, reltol=1e-4) do a
-        post(a, b, c)
-    end |> first
-end
-# function get_prob_bc(post, b, c)
-#     hquadrature(-MAX_SD, MAX_SD, abstol=1e-8) do a
-#         post(a, b, c)
-#     end |> first
-# end
-
-function predict_bc_choice_new(model, ab_trial, bc_trial; choice=true)
-    post = make_abc_posterior(model, ab_trial, bc_trial)
+"Probability of choosing b over c given observed choices and rts for (a vs. b) and (a vs. c) "
+function predict_bc_choice(model, ab_trial, bc_trial; choice=true, reltol=1e-6, maxevals=10^7)
+    # to reduce the dimensionality of the integral, we precompute choice probability
+    # for all possible preferences (marginalizing over RT)
     p_choose = make_choice_curve(model; choice)
 
-    Z, ε = hcubature(-MAX_SD * ones(2), MAX_SD * ones(2), abstol=1e-5) do (b, c)
-        p = p_choose(b - c)
-        get_prob_bc(post, b, c) * p
-    end
-    if ε > 1e-4
-        # @error "predict_bc_choice: integral did not converge" model ab_trial bc_trial
-        return NaN
-    end
-    return Z
-end
-
-function hcubature_m(f::Function, fdim::Integer, xmin, xmax; kws...)
-    hcubature(fdim, f, xmin, xmax;  kws...)
-end
-
-function predict_bc_choice_three(model, ab_trial, bc_trial; choice=true, reltol=1e-6, maxevals=10^7)
-    post = make_abc_posterior(model, ab_trial, bc_trial; normalize=false)
-    p_choose = make_choice_curve(model; choice)
-
-    # Z, ε = hcubature_m(2, make_bounds()...; reltol, maxevals) do (a, b, c), out
-    #     p_vals = post(a,b,c)
-    #     out[1] = p_vals * p_choose(b - c)
-    #     out[2] = p_vals # this is the normalizer
-    # end
-    # ε_choice = ε[1] / Z[2]  # this is the error we actually care about
-
-    
     Z, ε = hcubature_m(3, make_bounds()...; reltol, maxevals) do (a, b, c), out
-        p_vals = post(a,b,c)
-        out[1] = p_vals * p_choose(b - c)
-        out[2] = p_vals * (1 - p_choose(b - c))
-        out[3] = p_vals # this is the normalizer
+        p_vals = abc_posterior(model, ab_trial, bc_trial, a, b, c)
+        p_choice = p_choose(b - c)
+        out[1] = p_vals * p_choice
+        out[2] = p_vals * (1 - p_choice)
+        out[3] = p_vals
+        # Note: we are computing redundant information here because out[3] = out[1] + out[2]
+        # For some reason that I do not even remotely understand, this is necessary for
+        # the integral to converge correctly. Apparently, getting below the tolerance on
+        # just two of the values is not sufficient.
     end
-    return Z[1] / (Z[1] + Z[2])
-    
+    pb, pc, normalizer = Z
+    @assert (pb + pc) ≈ normalizer # we're not crazy
+
+    ε_choice = ε[1] / normalizer
     if ε_choice > 1e-4
         @warn "predict_bc_choice: integral did not converge" Tuple(Z) Tuple(ε) model ab_trial bc_trial
         return NaN
     end
     
-    return Z[1] / Z[2]
+    return pb / normalizer
 end
 
 
@@ -155,8 +99,8 @@ function define_trials(fast=3., slow=9.)
     )
 end
 
-function exp2_predictions(model; choice=true, new=true)
+function exp2_predictions(model; choice=true)
     map(collect(define_trials())) do (k, trials)
-        k => predict_bc_choice(model, trials...; choice, new)
+        k => predict_bc_choice(model, trials...; choice)
     end |> Dict
 end
