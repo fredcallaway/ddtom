@@ -4,3 +4,4 @@ wfpt.jl
 scratch.jl
 scratch_plots.jl
 figs/
+test_lba.jl
