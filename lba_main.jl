@@ -49,4 +49,4 @@ predictions = Dict(
 write("results/lba_fitted_predictions.json", JSON.json(predictions))
 
 using Serialization
-serialize("tmp/lba_fit", model)
+serialize("fits/lba", model)

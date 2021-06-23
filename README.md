@@ -1,6 +1,6 @@
 # Code for "Rational preference inference from response time"
 
-Models of people's inferences about other's preferences based on reaction times. 
+Models of people's inferences about other's preferences based on response times. 
 
 ## Setup
 This runs on julia 1.6 (and presumably later versions). You need to install the following dependencies:
@@ -12,5 +12,8 @@ This runs on julia 1.6 (and presumably later versions). You need to install the 
 - experiment2.jl: additional code to predict a new choice based on previous choices
 - fitting.jl: base code to fit models to the plotse
 - main.jl: fits the DDM model and generates predictions.
+- lba_main.jl: fits the LBA model
+- alt_ddm_main.jl: fits DDM to exp1 only and with starting points
+- sensitivity_analysis.jl: self-explanatory
 
 The code is not well documented. Please contact me (fredcallaway@princeton.edu) if you have any questions!

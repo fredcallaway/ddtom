@@ -104,6 +104,7 @@ end
 exp3_loss(model, θlo, θhi, α) = sse(exp3_predict(model, θlo, θhi, α), exp3_targets)
 
 function optimize_θs(model, α)
+    # this could be two 1d optimizations, but it's so fast anyway
     res = optimize([model.θ, model.θ]) do (θlo, θhi)
         exp3_loss(model, θlo, θhi, α)
     end

@@ -1,9 +1,9 @@
 using Sobol
 using ProgressMeter
 using SplitApplyCombine
-@everywhere using Random
 using Distributed
 
+@everywhere using Random
 @everywhere include("fitting.jl")
 include("figure.jl")
 
@@ -12,15 +12,12 @@ pyplot()
 mkpath("figs")
 
 # %% ==================== Identify reasonable paramaters ====================
+
 @everywhere Random.seed!(123)
 
-big_βs = 10 .^ (-2:.1:1)
-big_θs = 10 .^ (-1:0.1:2)
+big_βs = 10 .^ (-2:(1/30):1)
+big_θs = 10 .^ (-1:(1/30):2)
 big_grid = collect(Iterators.product(big_βs, big_θs))
-
-# plaus = @showprogress map(big_grid) do (β, θ)
-#     data_plausible(DDM(;β, θ))
-# end
 
 rt = @showprogress pmap(big_grid) do (β, θ)
     reasonable_rt(DDM(;β, θ))
@@ -39,7 +36,7 @@ function make_heat(X, color)
     c = cgrad([color, "#ffffff"])
     X = float.(X)
     X[X .== 0] .= NaN
-    idx = 1:10:31
+    idx = 1:30:91
     heatmap!(X; c,
         yaxis=("β", (idx, big_βs[idx])), 
         xaxis=("θ", (idx, big_θs[idx])),
@@ -66,6 +63,7 @@ end;
 end |> all
 
 # %% ==================== Experiment 2 ====================
+
 Expt_2 = @showprogress pmap(models) do model
     prediction = Dict(exp2_keys .=> rescale(exp2_predictions(model)))
     (;model.β, model.θ, prediction)
@@ -93,7 +91,7 @@ filter!(grid3) do (β, θlo, θhi)
 end
 
 # Exp (instead of Expt) was an unfortunate early established standard
-Exp_3 = map(grid3) do (β, θlo, θhi)
+Exp_3 = @showprogress map(grid3) do (β, θlo, θhi)
     model = DDM(;β, θ=NaN)
     α = optimize(0, 500) do α
         exp3_loss(model, θlo, θhi, α)
@@ -103,6 +101,7 @@ Exp_3 = map(grid3) do (β, θlo, θhi)
 end
 
 # %% --------
+
 # All the differences are in the predicted direction
 @assert all(Exp_3) do res
     x = res.prediction
@@ -119,10 +118,7 @@ end |> sum
 
 println("$n_interact / $(length(Exp_3)) have the interaction" )
 
-
 # %% --------
 
 predictions = (;Expt_1, Expt_2, Exp_3)
-
 write("results/sensitivity_analysis.json", JSON.json(predictions))
-

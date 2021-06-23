@@ -4,7 +4,7 @@ using Distributed
 
 @everywhere include("fitting.jl")
 mkpath("results")
-mkpath("tmp")
+mkpath("fits")
 
 # %% ==================== Sobol ====================
 
@@ -40,8 +40,8 @@ predictions = Dict(
     "Exp_3" => Dict(exp3_keys .=> exp3_predict(model, θlo, θhi, α))
 )
 
-@assert model isa DDM  # make sure I'm in the right terminal heheh
+@assert model isa DDM  # make sure I'm in the right terminal
 write("results/ddm_fitted_predictions.json", JSON.json(predictions))
 
 using Serialization
-serialize("tmp/ddm_fit", model)
+serialize("fits/ddm", model)

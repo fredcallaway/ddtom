@@ -1,14 +1,14 @@
 include("figure.jl")
-# include("model.jl")
 include("fitting.jl")
 include("lba_model.jl")
-
 using Serialization
+
 # %% --------
 
-ddm = deserialize("tmp/ddm_fit")
-lba = deserialize("tmp/lba_fit")
-ddm_starting = deserialize("tmp/ddm_starting")
+ddm = deserialize("fits/ddm")
+lba = deserialize("fits/lba")
+ddm_exp1 = deserialize("fits/ddm_exp1")
+ddm_starting = deserialize("fits/ddm_starting")
 ddm_starting_fixed = DDMStarting(;ddm.β, ddm.θ, sz=ddm.θ)
 
 # %% --------
@@ -28,7 +28,7 @@ end
 
 figure("starting_points"; pdf=true) do
     plot_data!()
-    plot_curve!(ddm, 1, "Vanilla DDM")
+    plot_curve!(ddm_exp1, 1, "Vanilla DDM")
     plot_curve!(ddm_starting_fixed, 2, "DDM with fixed large starting point range")
     plot_curve!(ddm_starting, 3, "DDM with fitted starting point range")
 end
@@ -39,5 +39,4 @@ figure("ddm_lba_curve") do
     plot_curve!(lba, 2)
 end
 
-run(`cp figs/starting_points.pdf /Users/fred/Papers/ddtom/figures`)
-# run(`cp figs/ddm_lba_curve.pdf /Users/fred/Papers/ddtom/figures`)
+#run(`cp figs/starting_points.pdf /Users/fred/Papers/ddtom/figures`)
