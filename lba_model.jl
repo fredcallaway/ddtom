@@ -1,5 +1,7 @@
 include("lba_base.jl")
 
+# Note: in paper the variables are notated β, I_0, b, A.
+# sv is the noise, not mentioned because it's fixed to 1 (as in the DDM model)
 Base.@kwdef struct LBA <: Model
     β::Float64  # drift slope
     β0::Float64  # drift intercept (to prevent negative drifts and undefined RTs)
