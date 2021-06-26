@@ -5,7 +5,7 @@ Models of people's inferences about other's preferences based on response times.
 ## Setup
 This runs on julia 1.6 (and presumably later versions). You need to install the following dependencies:
 
-`] add JSON ProgressMeter Sobol SplitApplyCombine https://github.com/DrugowitschLab/DiffModels.jl Statistics Optim Cubature Distributions`
+`] add JSON ProgressMeter Sobol SplitApplyCombine https://github.com/DrugowitschLab/DiffModels.jl Statistics Optim Cubature Distributions DataStructures Interpolation Plots`
 
 ## Key files
 - model.jl: the basic model, supports experiment 1 and 3 predictions
