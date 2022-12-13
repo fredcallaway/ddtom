@@ -16,4 +16,4 @@ This runs on julia 1.6 (and presumably later versions). You need to install the 
 - alt_ddm_main.jl: fits DDM to exp1 only and with starting points
 - sensitivity_analysis.jl: self-explanatory
 
-The code is not well documented. Please contact me (fredcallaway@princeton.edu) if you have any questions!
+The code is not well documented. Please contact me (fredcallaway@gmail.com) if you have any questions!
